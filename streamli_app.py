@@ -1,114 +1,65 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import numpy_financial as npf
-import plotly.express as px
-import traceback
-import io
-import os
+# --------------------------------------------------
+# AMORTISSEMENT DETTE
+# --------------------------------------------------
 
-# ==================================================
-# CONFIGURATION
-# ==================================================
+monthly_rate = taux_dette / 12
+nper = duree_dette * 12
 
-st.set_page_config(
-    page_title="Modèle Financier Immobilier",
-    layout="wide"
-)
+if monthly_rate > 0:
 
-st.title("🏢 Modèle Financier Immobilier")
-st.markdown("Analyse de rentabilité immobilière")
-
-# ==================================================
-# FICHIER EXCEL
-# ==================================================
-
-excel_file_path = "Real_estate_app_project.xlsx"
-
-if not os.path.exists(excel_file_path):
-    st.error(
-        f"Fichier introuvable : {excel_file_path}"
-    )
-    st.stop()
-
-try:
-
-    excel_file = pd.ExcelFile(excel_file_path)
-
-    if "Hypothèses" in excel_file.sheet_names:
-        sheet_name = "Hypothèses"
-    elif "Hypotheses" in excel_file.sheet_names:
-        sheet_name = "Hypotheses"
-    else:
-        st.error(
-            f"Feuille Hypothèses introuvable.\n\n"
-            f"Feuilles trouvées : {excel_file.sheet_names}"
-        )
-        st.stop()
-
-    hypotheses_df = pd.read_excel(
-        excel_file,
-        sheet_name=sheet_name
+    mensualite = npf.pmt(
+        monthly_rate,
+        nper,
+        -montant_dette
     )
 
-    hypotheses_df.columns = [
-        "Parameter",
-        "Value"
-    ]
+else:
 
-    hypotheses_df = (
-        hypotheses_df
-        .dropna()
-        .set_index("Parameter")
+    mensualite = montant_dette / nper
+
+solde = montant_dette
+
+schedule = []
+
+for annee in range(1, duree_dette + 1):
+
+    debut = solde
+
+    interets_annuels = 0
+    principal_annuel = 0
+
+    for mois in range(12):
+
+        if solde <= 0:
+            break
+
+        interet = solde * monthly_rate
+
+        principal = mensualite - interet
+
+        principal = min(principal, solde)
+
+        # Correction de l'erreur
+        solde -= principal
+
+        interets_annuels += interet
+        principal_annuel += principal
+
+    service_dette = (
+        interets_annuels +
+        principal_annuel
     )
 
-except Exception as e:
+    schedule.append(
+        {
+            "Année": annee,
+            "Dette début": debut,
+            "Intérêts": interets_annuels,
+            "Principal": principal_annuel,
+            "Service dette": service_dette,
+            "Dette fin": solde
+        }
+    )
 
-    st.error("Erreur lors du chargement du fichier")
+debt_df = pd.DataFrame(schedule)
 
-    st.code(traceback.format_exc())
-
-    st.stop()
-
-# ==================================================
-# FONCTIONS
-# ==================================================
-
-def get_hypothesis(name):
-
-    try:
-
-        value = hypotheses_df.loc[name, "Value"]
-
-        return float(value)
-
-    except Exception:
-
-        st.error(
-            f"Paramètre absent : {name}"
-        )
-
-        st.stop()
-
-# ==================================================
-# HYPOTHESES
-# ==================================================
-
-prix_acquisition = get_hypothesis("Prix acquisition")
-frais_acquisition = get_hypothesis("Frais acquisition %")
-travaux = get_hypothesis("Travaux")
-
-loyer_brut_an1 = get_hypothesis("Loyer brut An1")
-croissance_loyers = get_hypothesis("Croissance loyers %")
-
-vacance = get_hypothesis("Vacance %")
-charges = get_hypothesis("Charges %")
-
-dette_pct = get_hypothesis("Dette %")
-taux_dette = get_hypothesis("Taux dette %")
-duree_dette = int(get_hypothesis("Duree dette"))
-
-horizon = int(get_hypothesis("Horizon"))
-
-exit_cap_rate = get_hypothesis("Exit Cap Rate %")
-frais_cession = get_hypothesis("Frais 
