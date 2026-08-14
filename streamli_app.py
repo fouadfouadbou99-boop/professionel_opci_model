@@ -178,7 +178,8 @@ for annee in range(1, duree_dette + 1):
 
     for m in range(12):
 
-        if solde <= 0:
+      if solde <= 0:
+    break
 
 if annee <= duree_dette:
 
@@ -193,3 +194,9 @@ if annee <= duree_dette:
     principal = ligne[
         "Principal"
     ].iloc[0]
+
+else:
+
+    interets = 0
+
+    principal = 0
