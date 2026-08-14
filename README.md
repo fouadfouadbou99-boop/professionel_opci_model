@@ -1,24 +1,14 @@
-# OPCI Streamlit
+# Modèle Immobilier OPCI
 
-Modèle professionnel d'évaluation d'actifs immobiliers OPCI.
+Application Streamlit permettant :
 
-## Fonctionnalités
+- Simulation de cash-flow immobilier
+- Calcul de VAN
+- Calcul de TRI
+- Tableau de bord simplifié
 
-- Hypothèses dynamiques
-- Cash Flow sur 20 ans
-- NOI
-- FFO
-- AFFO
-- VAN
-- TRI
-- MOIC
-- Sensibilité
-- Dashboard exécutif
-
-## Installation
+## Exécution locale
 
 pip install -r requirements.txt
-
-## Exécution
 
 streamlit run app.py
