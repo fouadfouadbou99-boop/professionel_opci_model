@@ -4,120 +4,130 @@ import numpy as np
 import numpy_financial as npf
 import plotly.express as px
 
+# ==========================================================
+# CONFIGURATION
+# ==========================================================
+
 st.set_page_config(
-    page_title="OPCI Immobilier",
+    page_title="Modèle Immobilier OPCI",
     page_icon="🏢",
     layout="wide"
 )
 
 st.title("🏢 Modèle Immobilier OPCI Professionnel")
+st.markdown("Simulation financière immobilière OPCI")
 
-# =====================================================
-# SIDEBAR
-# =====================================================
+# ==========================================================
+# SIDEBAR - HYPOTHESES
+# ==========================================================
 
 st.sidebar.header("Hypothèses")
 
 prix_acquisition = st.sidebar.number_input(
     "Prix acquisition",
-    value=1000000.0
+    value=1000000.0,
+    step=10000.0
 )
 
 frais_acquisition = st.sidebar.number_input(
-    "Frais acquisition",
-    value=0.08
+    "Frais acquisition (%)",
+    value=0.08,
+    step=0.01
 )
 
 travaux = st.sidebar.number_input(
     "Travaux",
-    value=100000.0
+    value=100000.0,
+    step=10000.0
 )
 
 loyer_brut_a1 = st.sidebar.number_input(
-    "Loyer brut année 1",
-    value=120000.0
+    "Loyer Brut année 1",
+    value=120000.0,
+    step=5000.0
 )
 
 croissance = st.sidebar.number_input(
-    "Croissance annuelle",
+    "Croissance annuelle (%)",
     value=0.02,
-    format="%.4f"
+    step=0.01
 )
 
 vacance = st.sidebar.number_input(
-    "Vacance",
+    "Vacance (%)",
     value=0.05,
-    format="%.4f"
+    step=0.01
 )
 
 opex = st.sidebar.number_input(
-    "OPEX",
+    "OPEX (%)",
     value=0.20,
-    format="%.4f"
+    step=0.01
 )
 
 ltv = st.sidebar.number_input(
-    "LTV",
+    "LTV (%)",
     value=0.60,
-    format="%.4f"
+    step=0.05
 )
 
 taux_dette = st.sidebar.number_input(
-    "Taux dette",
+    "Taux dette (%)",
     value=0.05,
-    format="%.4f"
+    step=0.01
 )
 
 horizon = st.sidebar.slider(
-    "Horizon",
-    5,
-    30,
-    20
+    "Horizon (années)",
+    min_value=5,
+    max_value=30,
+    value=20
 )
 
 exit_yield = st.sidebar.number_input(
-    "Exit Yield",
+    "Exit Yield (%)",
     value=0.07,
-    format="%.4f"
+    step=0.005
 )
 
 discount_rate = st.sidebar.number_input(
-    "Discount Rate",
+    "Discount Rate (%)",
     value=0.08,
-    format="%.4f"
+    step=0.01
 )
 
-# =====================================================
-# INVESTISSEMENT
-# =====================================================
+# ==========================================================
+# CALCUL INVESTISSEMENT
+# ==========================================================
 
 cout_total = prix_acquisition * (1 + frais_acquisition) + travaux
 
 montant_dette = cout_total * ltv
+
 equity = cout_total - montant_dette
 
-# =====================================================
-# CASH FLOW
-# =====================================================
+# ==========================================================
+# GENERATION CASH FLOWS
+# ==========================================================
 
-rows = []
+cashflows = []
 
-for year in range(1, horizon + 1):
+for annee in range(1, horizon + 1):
 
-    loyer_brut = loyer_brut_a1 * ((1 + croissance) ** (year - 1))
+    loyer_brut = loyer_brut_a1 * ((1 + croissance) ** (annee - 1))
 
     loyer_net = loyer_brut * (1 - vacance)
 
     noi = loyer_net * (1 - opex)
 
-    interets = montant_dette * taux_dette
+    charge_interet = montant_dette * taux_dette
 
-    ffo = noi - interets
+    ffo = noi - charge_interet
 
     affo = ffo * 0.95
 
-    rows.append([
-        year,
+    cashflows.append([
+        annee,
         loyer_brut,
         loyer_net,
         noi,
@@ -126,7 +136,7 @@ for year in range(1, horizon + 1):
     ])
 
 df = pd.DataFrame(
-    rows,
+    cashflows,
     columns=[
         "Année",
         "Loyer Brut",
@@ -137,24 +147,32 @@ df = pd.DataFrame(
     ]
 )
 
-# =====================================================
-# VALEUR DE SORTIE
-# =====================================================
+# ==========================================================
+# VALEUR TERMINALE
+# ==========================================================
 
-noi_terminal = df.iloc[-1]["NOI"]
+dernier_noi = df["NOI"].iloc[-1]
 
-valeur_sortie = noi_terminal / exit_yield
+valeur_sortie = dernier_noi / exit_yield
+
+# ==========================================================
+# CASH FLOWS INVESTISSEUR
+# ==========================================================
 
 cashflows_equity = [-equity]
 
-for _, row in df.iterrows():
-    cashflows_equity.append(row["AFFO"])
+for valeur in df["AFFO"]:
+    cashflows_equity.append(valeur)
 
 cashflows_equity[-1] += valeur_sortie
 
-irr_equity = npf.irr(cashflows_equity)
+# ==========================================================
+# KPI
+# ==========================================================
 
-npv_equity = npf.npv(
+tri_equity = npf.irr(cashflows_equity)
+
+van_equity = npf.npv(
     discount_rate,
     cashflows_equity
 )
@@ -164,173 +182,190 @@ moic = (
     abs(cashflows_equity[0])
 )
 
-# =====================================================
-# KPI
-# =====================================================
+occupation = 1 - vacance
 
-st.subheader("📊 KPI")
+dscr = 1.50
 
-c1, c2, c3, c4 = st.columns(4)
+icr = 2.50
 
-c1.metric(
+# ==========================================================
+# KPI VISUELS
+# ==========================================================
+
+st.subheader("📊 KPI Principaux")
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric(
     "TRI Equity",
-    f"{irr_equity:.2%}"
+    f"{tri_equity:.2%}"
 )
 
-c2.metric(
+col2.metric(
     "VAN Equity",
-    f"{npv_equity:,.0f}"
+    f"{van_equity:,.0f} MAD"
 )
 
-c3.metric(
+col3.metric(
     "MOIC",
     f"{moic:.2f}x"
 )
 
-c4.metric(
-    "LTV",
-    f"{ltv:.0%}"
+col4.metric(
+    "Occupation",
+    f"{occupation:.2%}"
 )
 
-# =====================================================
-# CASHFLOW
-# =====================================================
+# ==========================================================
+# TABLEAU CASH FLOW
+# ==========================================================
 
-st.subheader("📈 Cash Flow")
+st.subheader("📋 Cash Flow")
 
 st.dataframe(
-    df,
+    df.style.format({
+        "Loyer Brut": "{:,.0f}",
+        "Loyer Net": "{:,.0f}",
+        "NOI": "{:,.0f}",
+        "FFO": "{:,.0f}",
+        "AFFO": "{:,.0f}"
+    }),
     use_container_width=True
 )
 
-fig_cashflow = px.line(
+# ==========================================================
+# GRAPHIQUE NOI / AFFO
+# ==========================================================
+
+st.subheader("📈 Evolution NOI / AFFO")
+
+fig1 = px.line(
     df,
     x="Année",
     y=["NOI", "AFFO"],
-    title="Evolution NOI / AFFO"
+    markers=True
 )
 
 st.plotly_chart(
-    fig_cashflow,
+    fig1,
     use_container_width=True
 )
 
-# =====================================================
-# KPI COMPLEMENTAIRES
-# =====================================================
-
-dscr = 1.5
-icr = 2.5
-occupation = 1 - vacance
-
-st.subheader("📌 KPI Complémentaires")
-
-a, b, c, d = st.columns(4)
-
-a.metric("DSCR", f"{dscr:.2f}")
-b.metric("ICR", f"{icr:.2f}")
-c.metric("Occupation", f"{occupation:.2%}")
-d.metric("Vacance", f"{vacance:.2%}")
-
-# =====================================================
-# SENSIBILITE
-# =====================================================
+# ==========================================================
+# SENSIBILITE TRI
+# ==========================================================
 
 st.subheader("🎯 Analyse de Sensibilité")
 
-sens_data = []
+sensibilite = []
 
-for variation in [-0.10, -0.05, 0, 0.05, 0.10]:
+for var in [-0.10, -0.05, 0, 0.05, 0.10]:
 
-    new_rent = loyer_brut_a1 * (1 + variation)
+    nouveau_loyer = loyer_brut_a1 * (1 + var)
 
-    cashflows = [-equity]
+    cfs = [-equity]
 
-    for y in range(1, horizon + 1):
+    for annee in range(1, horizon + 1):
 
-        gross = new_rent * ((1 + croissance) ** (y - 1))
+        gross = nouveau_loyer * ((1 + croissance) ** (annee - 1))
+
         net = gross * (1 - vacance)
+
         noi = net * (1 - opex)
+
         ffo = noi - (montant_dette * taux_dette)
+
         affo = ffo * 0.95
 
-        cashflows.append(affo)
+        cfs.append(affo)
 
-    terminal = noi / exit_yield
+    valeur_terminale = noi / exit_yield
 
-    cashflows[-1] += terminal
+    cfs[-1] += valeur_terminale
 
-    tri = npf.irr(cashflows)
+    tri = npf.irr(cfs)
 
-    sens_data.append({
-        "Variation": variation,
+    sensibilite.append({
+        "Scénario": f"{int(var*100)} %",
         "TRI": tri
     })
 
-sens_df = pd.DataFrame(sens_data)
+sens_df = pd.DataFrame(sensibilite)
 
-fig_sens = px.bar(
+fig2 = px.bar(
     sens_df,
-    x="Variation",
+    x="Scénario",
     y="TRI",
-    title="Sensibilité du TRI aux Loyers"
+    text="TRI",
+    color="TRI"
 )
 
 st.plotly_chart(
-    fig_sens,
+    fig2,
     use_container_width=True
 )
 
-# =====================================================
-# DECISION
-# =====================================================
+# ==========================================================
+# SCORING
+# ==========================================================
 
-st.subheader("✅ Scoring Investissement")
+st.subheader("✅ Décision Investissement")
 
-if irr_equity > 0.12 and moic > 2:
-    decision = "INVESTIR"
-    couleur = "green"
+if tri_equity >= 0.12 and moic >= 2:
+
+    st.success("INVESTIR")
+
 else:
-    decision = "REJETER"
-    couleur = "red"
 
-st.markdown(
-    f"<h2 style='color:{couleur}'>{decision}</h2>",
-    unsafe_allow_html=True
-)
+    st.error("REJETER")
 
-# =====================================================
+# ==========================================================
 # DASHBOARD EXECUTIF
-# =====================================================
+# ==========================================================
 
 st.subheader("🏢 Dashboard Exécutif")
 
-dashboard = pd.DataFrame(
-    {
-        "Indicateur": [
-            "Prix Acquisition",
-            "Coût Total",
-            "Dette",
-            "Equity",
-            "Valeur de Sortie",
-            "TRI",
-            "VAN",
-            "MOIC"
-        ],
-        "Valeur": [
-            prix_acquisition,
-            cout_total,
-            montant_dette,
-            equity,
-            valeur_sortie,
-            irr_equity,
-            npv_equity,
-            moic
-        ]
-    }
-)
+dashboard = pd.DataFrame({
+    "Indicateur": [
+        "Prix Acquisition",
+        "Coût Total",
+        "Dette",
+        "Equity",
+        "Valeur de Sortie",
+        "TRI Equity",
+        "VAN Equity",
+        "MOIC",
+        "DSCR",
+        "ICR"
+    ],
+    "Valeur": [
+        prix_acquisition,
+        cout_total,
+        montant_dette,
+        equity,
+        valeur_sortie,
+        tri_equity,
+        van_equity,
+        moic,
+        dscr,
+        icr
+    ]
+})
 
 st.dataframe(
     dashboard,
     use_container_width=True
+)
+
+# ==========================================================
+# EXPORT CSV
+# ==========================================================
+
+csv = df.to_csv(index=False).encode("utf-8")
+
+st.download_button(
+    label="📥 Télécharger Cash Flow CSV",
+    data=csv,
+    file_name="cashflow_opci.csv",
+    mime="text/csv"
 )
