@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import numpy_financial as npf
 from io import BytesIO
 
@@ -13,36 +12,37 @@ st.set_page_config(
 st.title("🏢 Modèle Immobilier OPCI")
 
 st.markdown(
-    "Simulation simplifiée d'investissement immobilier OPCI."
+    "Simulation d'investissement immobilier OPCI avec valorisation terminale."
 )
 
 # ==========================
-# SIDEBAR
+# HYPOTHESES
 # ==========================
 
 st.sidebar.header("Hypothèses")
 
 prix_acquisition = st.sidebar.number_input(
-    "Prix d'acquisition (MAD)",
+    "Prix acquisition (MAD)",
     value=10000000.0,
     step=100000.0
 )
 
-loyer_annuel = st.sidebar.number_input(
-    "Loyer brut année 1 (MAD)",
-    value=120000.0,
-    step=1000.0
-)
+rendement_initial = st.sidebar.slider(
+    "Rendement locatif initial (%)",
+    1.0,
+    15.0,
+    8.0
+) / 100
 
 croissance = st.sidebar.slider(
-    "Croissance annuelle (%)",
+    "Croissance annuelle loyers (%)",
     0.0,
     10.0,
     2.0
 ) / 100
 
 vacance = st.sidebar.slider(
-    "Taux de vacance (%)",
+    "Vacance (%)",
     0.0,
     20.0,
     5.0
@@ -80,8 +80,11 @@ horizon = st.sidebar.slider(
 # CALCULS
 # ==========================
 
-data = []
+loyer_annuel = prix_acquisition * rendement_initial
+
 cashflows = [-prix_acquisition]
+
+data = []
 
 dernier_noi = 0
 
@@ -93,7 +96,7 @@ for annee in range(1, horizon + 1):
 
     noi = loyer_net * (1 - opex)
 
-    ffo = noi * 0.70
+    ffo = noi
 
     affo = ffo * 0.95
 
@@ -118,19 +121,11 @@ cashflows[-1] += valeur_terminale
 
 # KPI
 
-van = npf.npv(
-    taux_actualisation,
-    cashflows
-)
+van = npf.npv(taux_actualisation, cashflows)
 
-tri = npf.irr(
-    cashflows
-)
+tri = npf.irr(cashflows)
 
-moic = (
-    sum(cashflows[1:])
-    / prix_acquisition
-)
+moic = sum(cashflows[1:]) / prix_acquisition
 
 # ==========================
 # DATAFRAMES
@@ -141,32 +136,23 @@ df_cashflow = pd.DataFrame(data)
 df_hyp = pd.DataFrame({
     "Paramètre": [
         "Prix acquisition",
-        "Loyer initial",
+        "Rendement initial",
         "Croissance",
         "Vacance",
-        "Opex",
-        "Actualisation",
+        "OPEX",
+        "Taux actualisation",
         "Exit Yield",
         "Horizon"
     ],
     "Valeur": [
         prix_acquisition,
-        loyer_annuel,
+        rendement_initial,
         croissance,
         vacance,
         opex,
         taux_actualisation,
         exit_yield,
         horizon
-    ]
-})
-
-df_acquisition = pd.DataFrame({
-    "Elément": [
-        "Prix acquisition"
-    ],
-    "Montant": [
-        prix_acquisition
     ]
 })
 
@@ -182,19 +168,6 @@ df_kpi = pd.DataFrame({
         round(tri * 100, 2),
         round(moic, 2),
         round(valeur_terminale, 0)
-    ]
-})
-
-df_sensibilite = pd.DataFrame({
-    "Croissance": [
-        "0%",
-        "2%",
-        "4%"
-    ],
-    "TRI Estimatif": [
-        round((tri - 0.02) * 100, 2),
-        round(tri * 100, 2),
-        round((tri + 0.02) * 100, 2)
     ]
 })
 
@@ -221,7 +194,7 @@ c3.metric(
 
 c4.metric(
     "Valeur Terminale",
-    f"{valeur_terminale:,.0f}"
+    f"{valeur_terminale:,.0f} MAD"
 )
 
 st.subheader("Cash-Flows")
@@ -243,10 +216,7 @@ st.line_chart(
 
 buffer = BytesIO()
 
-with pd.ExcelWriter(
-    buffer,
-    engine="xlsxwriter"
-) as writer:
+with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
 
     df_hyp.to_excel(
         writer,
@@ -254,34 +224,22 @@ with pd.ExcelWriter(
         index=False
     )
 
-    df_acquisition.to_excel(
-        writer,
-        sheet_name="02_Acquisition",
-        index=False
-    )
-
     df_cashflow.to_excel(
         writer,
-        sheet_name="03_Cashflow",
+        sheet_name="02_Cashflow",
         index=False
     )
 
     df_kpi.to_excel(
         writer,
-        sheet_name="04_KPI",
-        index=False
-    )
-
-    df_sensibilite.to_excel(
-        writer,
-        sheet_name="05_Sensibilite",
+        sheet_name="03_KPI",
         index=False
     )
 
 buffer.seek(0)
 
 st.download_button(
-    label="📥 Télécharger le modèle Excel OPCI",
+    "📥 Télécharger le modèle Excel OPCI",
     data=buffer,
     file_name="Modele_OPCI.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
