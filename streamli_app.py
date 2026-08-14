@@ -180,4 +180,16 @@ for annee in range(1, duree_dette + 1):
 
         if solde <= 0:
 
+if annee <= duree_dette:
 
+    ligne = debt_df.loc[
+        debt_df["Année"] == annee
+    ]
+
+    interets = ligne[
+        "Intérêts"
+    ].iloc[0]
+
+    principal = ligne[
+        "Principal"
+    ].iloc[0]
