@@ -11,21 +11,31 @@ st.set_page_config(
 
 st.title("🏢 Modèle Immobilier OPCI")
 
-st.markdown(
-    "Simulation d'investissement immobilier OPCI avec valorisation terminale."
-)
-
-# ==========================
+# =========================
 # HYPOTHESES
-# ==========================
+# =========================
 
 st.sidebar.header("Hypothèses")
 
 prix_acquisition = st.sidebar.number_input(
-    "Prix acquisition (MAD)",
+    "Prix Acquisition (MAD)",
     value=10000000.0,
     step=100000.0
 )
+
+ltv = st.sidebar.slider(
+    "LTV (%)",
+    0,
+    80,
+    60
+) / 100
+
+taux_dette = st.sidebar.slider(
+    "Taux Dette (%)",
+    0.0,
+    10.0,
+    5.0
+) / 100
 
 rendement_initial = st.sidebar.slider(
     "Rendement locatif initial (%)",
@@ -35,7 +45,7 @@ rendement_initial = st.sidebar.slider(
 ) / 100
 
 croissance = st.sidebar.slider(
-    "Croissance annuelle loyers (%)",
+    "Croissance loyers (%)",
     0.0,
     10.0,
     2.0
@@ -56,7 +66,7 @@ opex = st.sidebar.slider(
 ) / 100
 
 taux_actualisation = st.sidebar.slider(
-    "Taux d'actualisation (%)",
+    "Taux actualisation (%)",
     1.0,
     20.0,
     8.0
@@ -76,171 +86,229 @@ horizon = st.sidebar.slider(
     20
 )
 
-# ==========================
-# CALCULS
-# ==========================
+# =========================
+# FINANCEMENT
+# =========================
 
-loyer_annuel = prix_acquisition * rendement_initial
+montant_dette = prix_acquisition * ltv
+fonds_propres = prix_acquisition - montant_dette
 
-cashflows = [-prix_acquisition]
+# Dette in fine simplifiée
+
+interet_annuel = montant_dette * taux_dette
+
+# =========================
+# CASH FLOWS
+# =========================
+
+loyer_initial = prix_acquisition * rendement_initial
+
+cashflows_projet = [-prix_acquisition]
+cashflows_equity = [-fonds_propres]
 
 data = []
 
-dernier_noi = 0
-
 for annee in range(1, horizon + 1):
 
-    loyer_brut = loyer_annuel * ((1 + croissance) ** (annee - 1))
+    loyer_brut = loyer_initial * ((1 + croissance) ** (annee - 1))
 
     loyer_net = loyer_brut * (1 - vacance)
 
     noi = loyer_net * (1 - opex)
 
-    ffo = noi
+    cashflow_projet = noi
 
-    affo = ffo * 0.95
+    cashflow_equity = noi - interet_annuel
 
-    dernier_noi = noi
+    dscr = (
+        noi / interet_annuel
+        if interet_annuel > 0
+        else 0
+    )
 
-    cashflows.append(noi)
+    cashflows_projet.append(cashflow_projet)
+
+    cashflows_equity.append(cashflow_equity)
 
     data.append({
         "Année": annee,
-        "Loyer Brut": round(loyer_brut, 2),
-        "Loyer Net": round(loyer_net, 2),
-        "NOI": round(noi, 2),
-        "FFO": round(ffo, 2),
-        "AFFO": round(affo, 2)
+        "Loyer Brut": round(loyer_brut, 0),
+        "Loyer Net": round(loyer_net, 0),
+        "NOI": round(noi, 0),
+        "Intérêts": round(interet_annuel, 0),
+        "Cash Flow Equity": round(cashflow_equity, 0),
+        "DSCR": round(dscr, 2)
     })
 
-# Valeur terminale
+# =========================
+# VALEUR TERMINALE
+# =========================
 
-valeur_terminale = dernier_noi / exit_yield
+valeur_terminale = noi / exit_yield
 
-cashflows[-1] += valeur_terminale
+cashflows_projet[-1] += valeur_terminale
 
+cashflows_equity[-1] += (
+    valeur_terminale - montant_dette
+)
+
+# =========================
 # KPI
+# =========================
 
-van = npf.npv(taux_actualisation, cashflows)
+van_projet = npf.npv(
+    taux_actualisation,
+    cashflows_projet
+)
 
-tri = npf.irr(cashflows)
+tri_projet = npf.irr(
+    cashflows_projet
+)
 
-moic = sum(cashflows[1:]) / prix_acquisition
+van_equity = npf.npv(
+    taux_actualisation,
+    cashflows_equity
+)
 
-# ==========================
+tri_equity = npf.irr(
+    cashflows_equity
+)
+
+moic_equity = (
+    sum(cashflows_equity[1:])
+    / fonds_propres
+)
+
+debt_yield = (
+    (data[0]["NOI"] / montant_dette)
+    if montant_dette > 0
+    else 0
+)
+
+# =========================
 # DATAFRAMES
-# ==========================
+# =========================
 
 df_cashflow = pd.DataFrame(data)
 
-df_hyp = pd.DataFrame({
-    "Paramètre": [
-        "Prix acquisition",
-        "Rendement initial",
-        "Croissance",
-        "Vacance",
-        "OPEX",
-        "Taux actualisation",
-        "Exit Yield",
-        "Horizon"
-    ],
-    "Valeur": [
-        prix_acquisition,
-        rendement_initial,
-        croissance,
-        vacance,
-        opex,
-        taux_actualisation,
-        exit_yield,
-        horizon
-    ]
-})
-
 df_kpi = pd.DataFrame({
     "Indicateur": [
-        "VAN",
-        "TRI",
-        "MOIC",
-        "Valeur Terminale"
+        "VAN Projet",
+        "TRI Projet",
+        "VAN Equity",
+        "TRI Equity",
+        "MOIC Equity",
+        "LTV",
+        "Debt Yield"
     ],
     "Valeur": [
-        round(van, 0),
-        round(tri * 100, 2),
-        round(moic, 2),
-        round(valeur_terminale, 0)
+        round(van_projet, 0),
+        round(tri_projet * 100, 2),
+        round(van_equity, 0),
+        round(tri_equity * 100, 2),
+        round(moic_equity, 2),
+        round(ltv * 100, 2),
+        round(debt_yield * 100, 2)
     ]
 })
 
-# ==========================
+# =========================
 # DASHBOARD
-# ==========================
+# =========================
 
-c1, c2, c3, c4 = st.columns(4)
+st.subheader("KPI Projet")
+
+c1, c2 = st.columns(2)
 
 c1.metric(
     "VAN Projet",
-    f"{van:,.0f} MAD"
+    f"{van_projet:,.0f} MAD"
 )
 
 c2.metric(
-    "TRI",
-    f"{tri:.2%}"
+    "TRI Projet",
+    f"{tri_projet:.2%}"
 )
 
+st.subheader("KPI Equity")
+
+c3, c4, c5 = st.columns(3)
+
 c3.metric(
-    "MOIC",
-    f"{moic:.2f}x"
+    "VAN Equity",
+    f"{van_equity:,.0f} MAD"
 )
 
 c4.metric(
-    "Valeur Terminale",
-    f"{valeur_terminale:,.0f} MAD"
+    "TRI Equity",
+    f"{tri_equity:.2%}"
 )
 
-st.subheader("Cash-Flows")
+c5.metric(
+    "MOIC Equity",
+    f"{moic_equity:.2f}x"
+)
+
+st.subheader("Financement")
+
+c6, c7, c8 = st.columns(3)
+
+c6.metric(
+    "Dette",
+    f"{montant_dette:,.0f}"
+)
+
+c7.metric(
+    "Fonds Propres",
+    f"{fonds_propres:,.0f}"
+)
+
+c8.metric(
+    "Debt Yield",
+    f"{debt_yield:.2%}"
+)
+
+st.subheader("Cash Flows")
 
 st.dataframe(
     df_cashflow,
     use_container_width=True
 )
 
-st.subheader("Evolution du NOI")
-
 st.line_chart(
-    df_cashflow.set_index("Année")["NOI"]
+    df_cashflow.set_index("Année")[
+        ["NOI", "Cash Flow Equity"]
+    ]
 )
 
-# ==========================
+# =========================
 # EXPORT EXCEL
-# ==========================
+# =========================
 
 buffer = BytesIO()
 
-with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-
-    df_hyp.to_excel(
-        writer,
-        sheet_name="01_Hypotheses",
-        index=False
-    )
+with pd.ExcelWriter(
+    buffer,
+    engine="xlsxwriter"
+) as writer:
 
     df_cashflow.to_excel(
         writer,
-        sheet_name="02_Cashflow",
+        sheet_name="Cashflows",
         index=False
     )
 
     df_kpi.to_excel(
         writer,
-        sheet_name="03_KPI",
+        sheet_name="KPI",
         index=False
     )
 
 buffer.seek(0)
 
 st.download_button(
-    "📥 Télécharger le modèle Excel OPCI",
+    "📥 Télécharger Excel",
     data=buffer,
-    file_name="Modele_OPCI.xlsx",
+    file_name="Modele_OPCI_Dette.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
