@@ -1,1040 +1,519 @@
-Python
-1
 import streamlit as st
-2
 import pandas as pd
-3
 import numpy as np
-4
 import numpy_financial as npf
-5
 import plotly.express as px
-6
 import io
-7
 import traceback
-8
- 
-9
+
 # =====================================================
-10
 # CONFIGURATION
-11
 # =====================================================
-12
- 
-13
+
 st.set_page_config(
-14
-page_title="Modèle Financier Immobilier",
-15
-layout="wide"
-16
+    page_title="Modèle Financier Immobilier",
+    layout="wide"
 )
-17
- 
-18
+
 st.title("🏢 Modèle Financier Immobilier")
-19
 st.markdown("Analyse de rentabilité immobilière")
-20
- 
-21
+
 # =====================================================
-22
 # CHARGEMENT FICHIER
-23
 # =====================================================
-24
- 
-25
+
 uploaded_file = st.file_uploader(
-26
-"📂 Charger votre fichier Excel",
-27
-type=["xlsx"]
-28
+    "📂 Charger votre fichier Excel",
+    type=["xlsx"]
 )
-29
- 
-30
+
 if uploaded_file is None:
-31
-st.info("Veuillez charger votre fichier Excel.")
-32
-st.stop()
-33
- 
-34
+    st.info("Veuillez charger votre fichier Excel.")
+    st.stop()
+
 try:
-35
- 
-36
-excel_file = pd.ExcelFile(uploaded_file)
-37
- 
-38
-if "Hypothèses" in excel_file.sheet_names:
-39
-sheet_name = "Hypothèses"
-40
-elif "Hypotheses" in excel_file.sheet_names:
-41
-sheet_name = "Hypotheses"
-42
-else:
-43
-st.error(
-44
-f"Feuille Hypothèses introuvable.\n\n"
-45
-f"Feuilles disponibles : {excel_file.sheet_names}"
-46
-)
-47
-st.stop()
-48
- 
-49
-hypotheses_df = pd.read_excel(
-50
-excel_file,
-51
-sheet_name=sheet_name
-52
-)
-53
- 
-54
-hypotheses_df.columns = [
-55
-"Parameter",
-56
-"Value"
-57
-]
-58
- 
-59
-hypotheses_df = hypotheses_df.dropna()
-60
- 
-61
-hypotheses_df = hypotheses_df.set_index(
-62
-"Parameter"
-63
-)
-64
- 
-65
+
+    excel_file = pd.ExcelFile(uploaded_file)
+
+    if "Hypothèses" in excel_file.sheet_names:
+        sheet_name = "Hypothèses"
+    elif "Hypotheses" in excel_file.sheet_names:
+        sheet_name = "Hypotheses"
+    else:
+        st.error(
+            f"Feuille Hypothèses introuvable.\n\n"
+            f"Feuilles disponibles : {excel_file.sheet_names}"
+        )
+        st.stop()
+
+    hypotheses_df = pd.read_excel(
+        excel_file,
+        sheet_name=sheet_name
+    )
+
+    hypotheses_df.columns = [
+        "Parameter",
+        "Value"
+    ]
+
+    hypotheses_df = hypotheses_df.dropna()
+
+    hypotheses_df = hypotheses_df.set_index(
+        "Parameter"
+    )
+
 except Exception:
-66
- 
-67
-st.error("Erreur lecture Excel")
-68
- 
-69
-st.code(
-70
-traceback.format_exc()
-71
-)
-72
- 
-73
-st.stop()
-74
- 
-75
+
+    st.error("Erreur lecture Excel")
+
+    st.code(
+        traceback.format_exc()
+    )
+
+    st.stop()
+
 # =====================================================
-76
 # FONCTION
-77
 # =====================================================
-78
- 
-79
+
 def get_hypothesis(name):
-80
- 
-81
-try:
-82
- 
-83
-value = hypotheses_df.loc[
-84
-name,
-85
-"Value"
-86
-]
-87
- 
-88
-return float(value)
-89
- 
-90
-except Exception:
-91
- 
-92
-st.error(
-93
-f"Paramètre absent : {name}"
-94
-)
-95
- 
-96
-st.stop()
-97
- 
-98
+
+    try:
+
+        value = hypotheses_df.loc[
+            name,
+            "Value"
+        ]
+
+        return float(value)
+
+    except Exception:
+
+        st.error(
+            f"Paramètre absent : {name}"
+        )
+
+        st.stop()
+
 # =====================================================
-99
 # HYPOTHESES
-100
 # =====================================================
-101
- 
-102
+
 prix_acquisition = get_hypothesis(
-103
-"Prix acquisition"
-104
+    "Prix acquisition"
 )
-105
- 
-106
+
 frais_acquisition = get_hypothesis(
-107
-"Frais acquisition %"
-108
+    "Frais acquisition %"
 )
-109
- 
-110
+
 travaux = get_hypothesis(
-111
-"Travaux"
-112
+    "Travaux"
 )
-113
- 
-114
+
 loyer_brut_an1 = get_hypothesis(
-115
-"Loyer brut An1"
-116
+    "Loyer brut An1"
 )
-117
- 
-118
+
 croissance_loyers = get_hypothesis(
-119
-"Croissance loyers %"
-120
+    "Croissance loyers %"
 )
-121
- 
-122
+
 vacance = get_hypothesis(
-123
-"Vacance %"
-124
+    "Vacance %"
 )
-125
- 
-126
+
 charges = get_hypothesis(
-127
-"Charges %"
-128
+    "Charges %"
 )
-129
- 
-130
+
 dette_pct = get_hypothesis(
-131
-"Dette %"
-132
+    "Dette %"
 )
-133
- 
-134
+
 taux_dette = get_hypothesis(
-135
-"Taux dette %"
-136
+    "Taux dette %"
 )
-137
- 
-138
+
 duree_dette = int(
-139
-get_hypothesis(
-140
-"Duree dette"
-141
+    get_hypothesis(
+        "Duree dette"
+    )
 )
-142
-)
-143
- 
-144
+
 horizon = int(
-145
-get_hypothesis(
-146
-"Horizon"
-147
+    get_hypothesis(
+        "Horizon"
+    )
 )
-148
-)
-149
- 
-150
+
 exit_cap_rate = get_hypothesis(
-151
-"Exit Cap Rate %"
-152
+    "Exit Cap Rate %"
 )
-153
- 
-154
+
 frais_cession = get_hypothesis(
-155
-"Frais cession %"
-156
+    "Frais cession %"
 )
-157
- 
-158
+
 taux_actualisation = get_hypothesis(
-159
-"Taux actualisation %"
-160
+    "Taux actualisation %"
 )
-161
- 
-162
+
 # =====================================================
-163
 # INVESTISSEMENT
-164
 # =====================================================
-165
- 
-166
+
 budget_total = (
-167
-prix_acquisition *
-168
-(1 + frais_acquisition)
-169
-+ travaux
-170
+    prix_acquisition *
+    (1 + frais_acquisition)
+    + travaux
 )
-171
- 
-172
+
 montant_dette = (
-173
-budget_total *
-174
-dette_pct
-175
+    budget_total *
+    dette_pct
 )
-176
- 
-177
+
 equity = (
-178
-budget_total -
-179
-montant_dette
-180
+    budget_total -
+    montant_dette
 )
-181
- 
-182
+
 # =====================================================
-183
 # DETTE
-184
 # =====================================================
-185
- 
-186
+
 monthly_rate = taux_dette / 12
-187
- 
-188
+
 nper = duree_dette * 12
-189
- 
-190
+
 if monthly_rate > 0:
-191
- 
-192
-mensualite = npf.pmt(
-193
-monthly_rate,
-194
-nper,
-195
--montant_dette
-196
-)
-197
- 
-198
+
+    mensualite = npf.pmt(
+        monthly_rate,
+        nper,
+        -montant_dette
+    )
+
 else:
-199
- 
-200
-mensualite = montant_dette / nper
-201
- 
-202
+
+    mensualite = montant_dette / nper
+
 solde = montant_dette
-203
- 
-204
+
 debt_rows = []
-205
- 
-206
+
 for annee in range(
-207
-1,
-208
-duree_dette + 1
-209
+    1,
+    duree_dette + 1
 ):
-210
- 
-211
-debut = solde
-212
- 
-213
-interets = 0
-214
-principal = 0
-215
- 
-216
-for mois in range(12):
-217
- 
-218
-if solde <= 0:
-219
-break
-220
- 
-221
-interet = (
-222
-solde *
-223
-monthly_rate
-224
-)
-225
- 
-226
-principal_mensuel = (
-227
-mensualite -
-228
-interet
-229
-)
-230
- 
-231
-principal_mensuel = min(
-232
-principal_mensuel,
-233
-solde
-234
-)
-235
- 
-236
-solde -= principal_mensuel
-237
- 
-238
-interets += interet
-239
- 
-240
-principal += principal_mensuel
-241
- 
-242
-debt_rows.append([
-243
-annee,
-244
-debut,
-245
-interets,
-246
-principal,
-247
-interets + principal,
-248
-max(solde, 0)
-249
-])
-250
- 
-251
+
+    debut = solde
+
+    interets = 0
+    principal = 0
+
+    for mois in range(12):
+
+        if solde <= 0:
+            break
+
+        interet = (
+            solde *
+            monthly_rate
+        )
+
+        principal_mensuel = (
+            mensualite -
+            interet
+        )
+
+        principal_mensuel = min(
+            principal_mensuel,
+            solde
+        )
+
+        solde -= principal_mensuel
+
+        interets += interet
+
+        principal += principal_mensuel
+
+    debt_rows.append([
+        annee,
+        debut,
+        interets,
+        principal,
+        interets + principal,
+        max(solde, 0)
+    ])
+
 debt_df = pd.DataFrame(
-252
-debt_rows,
-253
-columns=[
-254
-"Année",
-255
-"Solde Début",
-256
-"Intérêts",
-257
-"Principal",
-258
-"Service Dette",
-259
-"Solde Fin"
-260
-]
-261
+    debt_rows,
+    columns=[
+        "Année",
+        "Solde Début",
+        "Intérêts",
+        "Principal",
+        "Service Dette",
+        "Solde Fin"
+    ]
 )
-262
- 
-263
+
 # =====================================================
-264
 # PROJECTIONS
-265
 # =====================================================
-266
- 
-267
+
 projection_rows = []
-268
- 
-269
+
 loyer = loyer_brut_an1
-270
- 
-271
+
 for annee in range(
-272
-1,
-273
-horizon + 1
-274
+    1,
+    horizon + 1
 ):
-275
- 
-276
-revenus_bruts = loyer
-277
- 
-278
-vacance_montant = (
-279
-revenus_bruts *
-280
-vacance
-281
-)
-282
- 
-283
-revenus_nets = (
-284
-revenus_bruts -
-285
-vacance_montant
-286
-)
-287
- 
-288
-charges_montant = (
-289
-revenus_nets *
-290
-charges
-291
-)
-292
- 
-293
-noi = (
-294
-revenus_nets -
-295
-charges_montant
-296
-)
-297
- 
-298
-interets = 0
-299
-principal = 0
-300
- 
-301
-if annee <= duree_dette:
-302
- 
-303
-ligne = debt_df[
-304
-debt_df["Année"] == annee
-305
-]
-306
- 
-307
-if not ligne.empty:
-308
- 
-309
-interets = (
-310
-ligne["Intérêts"]
-311
-.iloc[0]
-312
-)
-313
- 
-314
-principal = (
-315
-ligne["Principal"]
-316
-.iloc[0]
-317
-)
-318
- 
-319
-cash_flow_equity = (
-320
-noi -
-321
-interets -
-322
-principal
-323
-)
-324
- 
-325
-projection_rows.append([
-326
-annee,
-327
-revenus_bruts,
-328
-revenus_nets,
-329
-noi,
-330
-interets,
-331
-principal,
-332
-cash_flow_equity
-333
-])
-334
- 
-335
-loyer = (
-336
-loyer *
-337
-(
-338
-1 +
-339
-croissance_loyers
-340
-)
-341
-)
-342
- 
-343
+
+    revenus_bruts = loyer
+
+    vacance_montant = (
+        revenus_bruts *
+        vacance
+    )
+
+    revenus_nets = (
+        revenus_bruts -
+        vacance_montant
+    )
+
+    charges_montant = (
+        revenus_nets *
+        charges
+    )
+
+    noi = (
+        revenus_nets -
+        charges_montant
+    )
+
+    interets = 0
+    principal = 0
+
+    if annee <= duree_dette:
+
+        ligne = debt_df[
+            debt_df["Année"] == annee
+        ]
+
+        if not ligne.empty:
+
+            interets = (
+                ligne["Intérêts"]
+                .iloc[0]
+            )
+
+            principal = (
+                ligne["Principal"]
+                .iloc[0]
+            )
+
+    cash_flow_equity = (
+        noi -
+        interets -
+        principal
+    )
+
+    projection_rows.append([
+        annee,
+        revenus_bruts,
+        revenus_nets,
+        noi,
+        interets,
+        principal,
+        cash_flow_equity
+    ])
+
+    loyer = (
+        loyer *
+        (
+            1 +
+            croissance_loyers
+        )
+    )
+
 projection_df = pd.DataFrame(
-344
-projection_rows,
-345
-columns=[
-346
-"Année",
-347
-"Revenus Bruts",
-348
-"Revenus Nets",
-349
-"NOI",
-350
-"Intérêts",
-351
-"Principal",
-352
-"Cash Flow Equity"
-353
-]
-354
+    projection_rows,
+    columns=[
+        "Année",
+        "Revenus Bruts",
+        "Revenus Nets",
+        "NOI",
+        "Intérêts",
+        "Principal",
+        "Cash Flow Equity"
+    ]
 )
-355
- 
-356
+
 # =====================================================
-357
 # VALEUR TERMINALE
-358
 # =====================================================
-359
- 
-360
+
 noi_sortie = (
-361
-projection_df["NOI"]
-362
-.iloc[-1]
-363
+    projection_df["NOI"]
+    .iloc[-1]
 )
-364
- 
-365
+
 valeur_terminale = (
-366
-noi_sortie /
-367
-exit_cap_rate
-368
+    noi_sortie /
+    exit_cap_rate
 )
-369
- 
-370
+
 produit_net_cession = (
-371
-valeur_terminale *
-372
-(
-373
-1 -
-374
-frais_cession
-375
+    valeur_terminale *
+    (
+        1 -
+        frais_cession
+    )
 )
-376
-)
-377
- 
-378
+
 # =====================================================
-379
 # KPI
-380
 # =====================================================
-381
- 
-382
+
 project_cf = [
-383
--budget_total
-384
+    -budget_total
 ]
-385
- 
-386
+
 project_cf.extend(
-387
-projection_df["NOI"].tolist()
-388
+    projection_df["NOI"].tolist()
 )
-389
- 
-390
+
 project_cf[-1] += (
-391
-produit_net_cession
-392
+    produit_net_cession
 )
-393
- 
-394
+
 equity_cf = [
-395
--equity
-396
+    -equity
 ]
-397
- 
-398
+
 equity_cf.extend(
-399
-projection_df[
-400
-"Cash Flow Equity"
-401
-].tolist()
-402
+    projection_df[
+        "Cash Flow Equity"
+    ].tolist()
 )
-403
- 
-404
+
 equity_cf[-1] += (
-405
-produit_net_cession
-406
+    produit_net_cession
 )
-407
- 
-408
+
 tri_projet = npf.irr(project_cf)
-409
- 
-410
+
 tri_equity = npf.irr(equity_cf)
-411
- 
-412
+
 van = (
-413
-npf.npv(
-414
-taux_actualisation,
-415
-project_cf[1:]
-416
+    npf.npv(
+        taux_actualisation,
+        project_cf[1:]
+    )
+    + project_cf[0]
 )
-417
-+ project_cf[0]
-418
-)
-419
- 
-420
+
 moic = (
-421
-sum(
-422
-x
-423
-for x in equity_cf
-424
-if x > 0
-425
+    sum(
+        x
+        for x in equity_cf
+        if x > 0
+    )
+    /
+    abs(equity_cf[0])
 )
-426
-/
-427
-abs(equity_cf[0])
-428
-)
-429
- 
-430
+
 # =====================================================
-431
 # DASHBOARD
-432
 # =====================================================
-433
- 
-434
+
 st.header("📈 Indicateurs")
-435
- 
-436
+
 c1, c2, c3, c4 = st.columns(4)
-437
- 
-438
+
 c1.metric(
-439
-"TRI Projet",
-440
-f"{tri_projet:.2%}"
-441
+    "TRI Projet",
+    f"{tri_projet:.2%}"
 )
-442
- 
-443
+
 c2.metric(
-444
-"TRI Equity",
-445
-f"{tri_equity:.2%}"
-446
+    "TRI Equity",
+    f"{tri_equity:.2%}"
 )
-447
- 
-448
+
 c3.metric(
-449
-"VAN",
-450
-f"{van:,.0f}"
-451
+    "VAN",
+    f"{van:,.0f}"
 )
-452
- 
-453
+
 c4.metric(
-454
-"MOIC",
-455
-f"{moic:.2f}x"
-456
+    "MOIC",
+    f"{moic:.2f}x"
 )
-457
- 
-458
+
 st.header("Projection Financière")
-459
- 
-460
+
 st.dataframe(
-461
-projection_df,
-462
-use_container_width=True
-463
+    projection_df,
+    use_container_width=True
 )
-464
- 
-465
+
 st.header("Tableau de Dette")
-466
- 
-467
+
 st.dataframe(
-468
-debt_df,
-469
-use_container_width=True
-470
+    debt_df,
+    use_container_width=True
 )
-471
- 
-472
+
 # =====================================================
-473
 # GRAPHIQUES
-474
 # =====================================================
-475
- 
-476
+
 fig = px.line(
-477
-projection_df,
-478
-x="Année",
-479
-y=[
-480
-"NOI",
-481
-"Cash Flow Equity"
-482
-],
-483
-title="NOI et Cash Flow Equity"
-484
+    projection_df,
+    x="Année",
+    y=[
+        "NOI",
+        "Cash Flow Equity"
+    ],
+    title="NOI et Cash Flow Equity"
 )
-485
- 
-486
+
 st.plotly_chart(
-487
-fig,
-488
-use_container_width=True
-489
+    fig,
+    use_container_width=True
 )
-490
- 
-491
+
 # =====================================================
-492
 # EXPORT EXCEL
-493
 # =====================================================
-494
- 
-495
+
 buffer = io.BytesIO()
-496
- 
-497
+
 with pd.ExcelWriter(
-498
-buffer,
-499
-engine="xlsxwriter"
-500
+    buffer,
+    engine="xlsxwriter"
 ) as writer:
-501
- 
-502
-projection_df.to_excel(
-503
-writer,
-504
-sheet_name="Projection",
-505
-index=False
-506
-)
-507
- 
-508
-debt_df.to_excel(
-509
-writer,
-510
-sheet_name="Dette",
-511
-index=False
-512
-)
-513
- 
-514
+
+    projection_df.to_excel(
+        writer,
+        sheet_name="Projection",
+        index=False
+    )
+
+    debt_df.to_excel(
+        writer,
+        sheet_name="Dette",
+        index=False
+    )
+
 st.download_button(
-515
-"📥 Télécharger Excel",
-516
-buffer.getvalue(),
-517
-"projection_immobiliere.xlsx",
-518
-"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-519
+    "📥 Télécharger Excel",
+    buffer.getvalue(),
+    "projection_immobiliere.xlsx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
-    
