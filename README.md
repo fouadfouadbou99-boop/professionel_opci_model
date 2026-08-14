@@ -11,4 +11,4 @@ Application Streamlit permettant :
 
 pip install -r requirements.txt
 
-streamlit run app.py
+app.py
