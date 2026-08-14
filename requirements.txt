@@ -2,5 +2,7 @@ streamlit
 pandas
 numpy
 numpy-financial
-openpyxl
 plotly
+openpyxl
+xlsxwriter
+scipy
