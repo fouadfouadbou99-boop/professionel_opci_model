@@ -178,7 +178,7 @@ for annee in range(1, duree_dette + 1):
 
     for m in range(12):
 
-      if solde <= 0:
+     if solde <= 0:
     break
 
 if annee <= duree_dette:
